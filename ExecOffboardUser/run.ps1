@@ -34,13 +34,14 @@ try {
         }
 
         { $_."OnedriveAccess" -ne "" } { 
-            Set-CIPPOnedriveAccess -tenantFilter $tenantFilter -userid $username -OnedriveAccessUser $request.body.OnedriveAccess -ExecutingUser $request.headers.'x-ms-client-principal' -APIName "ExecOffboardUser"
+            $request.body.OnedriveAccess | ForEach-Object { Set-CIPPOnedriveAccess -tenantFilter $tenantFilter -userid $username -OnedriveAccessUser $_.value -ExecutingUser $request.headers.'x-ms-client-principal' -APIName "ExecOffboardUser" }
         }
+
         { $_."AccessNoAutomap" -ne "" } { 
-            Set-CIPPMailboxAccess -tenantFilter $tenantFilter -userid $username -AccessUser $request.body.AccessNoAutomap -Automap $true -AccessRights @("FullAccess") -ExecutingUser $request.headers.'x-ms-client-principal' -APIName "ExecOffboardUser"
+            $request.body.AccessNoAutomap | ForEach-Object { Set-CIPPMailboxAccess -tenantFilter $tenantFilter -userid $username -AccessUser $_.value -Automap $false -AccessRights @("FullAccess") -ExecutingUser $request.headers.'x-ms-client-principal' -APIName "ExecOffboardUser" }
         }
         { $_."AccessAutomap" -ne "" } { 
-            Set-CIPPMailboxAccess -tenantFilter $tenantFilter -userid $username -AccessUser $request.body.AccessNoAutomap -Automap $false -AccessRights @("FullAccess") -ExecutingUser $request.headers.'x-ms-client-principal' -APIName "ExecOffboardUser"
+            $request.body.AccessAutomap | ForEach-Object { Set-CIPPMailboxAccess -tenantFilter $tenantFilter -userid $username -AccessUser $_.value -Automap $true -AccessRights @("FullAccess") -ExecutingUser $request.headers.'x-ms-client-principal' -APIName "ExecOffboardUser" }
         }
     
         { $_."OOO" -ne "" } { 
@@ -63,6 +64,15 @@ try {
 
         { $_."RemoveMobile" -eq 'true' } {
             Remove-CIPPMobileDevice -userid $userid -username $Username -tenantFilter $Tenantfilter -ExecutingUser $request.headers.'x-ms-client-principal' -APIName "ExecOffboardUser"
+        }
+        { $_."RemovePermissions" } {
+            $object = [PSCustomObject]@{
+                TenantFilter  = $tenantFilter
+                User          = $username
+                executingUser = $request.headers.'x-ms-client-principal'
+            }
+            Push-OutputBinding -Name Msg -Value $object
+            "Removal of permissions queued. This task will run in the background and send it's results to the logbook."
         }
     
     }
