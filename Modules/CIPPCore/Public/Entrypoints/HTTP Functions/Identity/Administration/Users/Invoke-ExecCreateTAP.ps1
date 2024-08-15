@@ -5,7 +5,7 @@ Function Invoke-ExecCreateTAP {
     .FUNCTIONALITY
         Entrypoint
     .ROLE
-        Identity.User.ReadWrite
+        Identity.User.TAP
     #>
     [CmdletBinding()]
     param($Request, $TriggerMetadata)
