@@ -14,8 +14,18 @@ function New-CIPPBackup {
         'CIPP' {
             try {
                 $BackupTables = @(
+                    'AppPermissions'
+                    'AccessRoleGroups'
+                    'ApiClients'
+                    'CippReplacemap'
+                    'CustomData'
+                    'CustomRoles'
                     'Config'
+                    'CommunityRepos'
                     'Domains'
+                    'GraphPresets'
+                    'GDAPRoles'
+                    'GDAPRoleTemplates'
                     'ExcludedLicenses'
                     'templates'
                     'standards'
@@ -23,10 +33,11 @@ function New-CIPPBackup {
                     'Extensions'
                     'WebhookRules'
                     'ScheduledTasks'
+                    'TenantProperties'
                 )
                 $CSVfile = foreach ($CSVTable in $BackupTables) {
                     $Table = Get-CippTable -tablename $CSVTable
-                    Get-AzDataTableEntity @Table | Select-Object * -ExcludeProperty DomainAnalyser, table, Timestamp, ETag | Select-Object *, @{l = 'table'; e = { $CSVTable } }
+                    Get-AzDataTableEntity @Table | Select-Object * -ExcludeProperty DomainAnalyser, table, Timestamp, ETag, Results | Select-Object *, @{l = 'table'; e = { $CSVTable } }
                 }
                 $RowKey = 'CIPPBackup' + '_' + (Get-Date).ToString('yyyy-MM-dd-HHmm')
                 $CSVfile
@@ -77,9 +88,11 @@ function New-CIPPBackup {
             }
             $Table = Get-CippTable -tablename 'ScheduledBackup'
             try {
-                $null = Add-CIPPAzDataTableEntity @Table -entity $entity -Force
+                measure-cipptask -TaskName 'ScheduledBackupStorage' -EventName 'CIPP.BackupCompleted' -Script {
+                    $null = Add-CIPPAzDataTableEntity @Table -entity $entity -Force
+                }
                 Write-LogMessage -headers $Headers -API $APINAME -message 'Created backup' -Sev 'Debug'
-                $State = 'Backup finished succesfully'
+                $State = 'Backup finished successfully'
             } catch {
                 $State = 'Failed to write backup to table storage'
                 $ErrorMessage = Get-CippException -Exception $_
@@ -89,10 +102,9 @@ function New-CIPPBackup {
         }
 
     }
-    return [pscustomobject]@{
-        BackupName  = $RowKey
-        BackupState = $State
-        BackupData  = $BackupData
-    }
+    return @([pscustomobject]@{
+            BackupName  = $RowKey
+            BackupState = $State
+        })
 }
 

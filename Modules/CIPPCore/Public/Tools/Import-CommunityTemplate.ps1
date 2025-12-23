@@ -8,6 +8,8 @@ function Import-CommunityTemplate {
         $Template,
         $SHA,
         $MigrationTable,
+        $LocationData,
+        $Source,
         [switch]$Force
     )
 
@@ -43,10 +45,27 @@ function Import-CommunityTemplate {
                     $NewJSON.excludedTenants = $excludedTenants
                 }
             }
+
+            if ($Template.PartitionKey -eq 'AppApprovalTemplate') {
+                # Extract the Permission Set name,id,permissions from the JSON and add to the AppPermissions table
+                $AppPermissionsTable = Get-CIPPTable -TableName 'AppPermissions'
+                $Permissions = $NewJSON.Permissions
+                $Entity = @{
+                    'PartitionKey' = 'Templates'
+                    'RowKey'       = $NewJSON.PermissionSetId
+                    'TemplateName' = $NewJSON.PermissionSetName
+                    'Permissions'  = [string]($Permissions | ConvertTo-Json -Depth 10 -Compress)
+                    'UpdatedBy'    = $NewJSON.UpdatedBy ?? $NewJSON.CreatedBy ?? 'System'
+                }
+                $null = Add-CIPPAzDataTableEntity @AppPermissionsTable -Entity $Entity -Force
+                Write-Information 'Added App Permissions to AppPermissions table'
+            }
+
             # Re-compress JSON and save to table
             $NewJSON = [string]($NewJSON | ConvertTo-Json -Depth 100 -Compress)
             $Template.JSON = $NewJSON
             $Template | Add-Member -MemberType NoteProperty -Name SHA -Value $SHA -Force
+            $Template | Add-Member -MemberType NoteProperty -Name Source -Value $Source -Force
             Add-CIPPAzDataTableEntity @Table -Entity $Template -Force
         } else {
             if ($Template.mailNickname) { $Type = 'Group' }
@@ -69,6 +88,7 @@ function Import-CommunityTemplate {
                         SHA          = $SHA
                         GUID         = $Template.id
                         RowKey       = $Template.id
+                        Source       = $Source
                     }
                     Add-CIPPAzDataTableEntity @Table -Entity $entity -Force
                     break
@@ -82,6 +102,20 @@ function Import-CommunityTemplate {
                     $id = $Template.id
                     $Template = $Template | Select-Object * -ExcludeProperty lastModifiedDateTime, 'assignments', '#microsoft*', '*@odata.navigationLink', '*@odata.associationLink', '*@odata.context', 'ScopeTagIds', 'supportsScopeTags', 'createdDateTime', '@odata.id', '@odata.editLink', '*odata.type', 'roleScopeTagIds@odata.type', createdDateTime, 'createdDateTime@odata.type'
                     Remove-ODataProperties -Object $Template
+
+                    $LocationInfo = [system.collections.generic.list[object]]::new()
+                    if ($LocationData) {
+                        $LocationData | ForEach-Object {
+                            if ($Template.conditions.locations.includeLocations -contains $_.id -or $Template.conditions.locations.excludeLocations -contains $_.id) {
+                                Write-Information "Adding location info for location ID $($_.id)"
+                                $LocationInfo.Add($_)
+                            }
+                        }
+                        if ($LocationInfo.Count -gt 0) {
+                            $Template | Add-Member -MemberType NoteProperty -Name LocationInfo -Value $LocationInfo -Force
+                        }
+                    }
+
                     $RawJson = ConvertTo-Json -InputObject $Template -Depth 100 -Compress
                     #Replace the ids with the displayname by using the migration table, this is a simple find and replace each instance in the JSON.
                     $MigrationTable.objects | ForEach-Object {
@@ -89,12 +123,14 @@ function Import-CommunityTemplate {
                             $RawJson = $RawJson.Replace($_.ID, $($_.DisplayName))
                         }
                     }
+
                     $entity = @{
                         JSON         = "$RawJson"
                         PartitionKey = 'CATemplate'
                         SHA          = $SHA
                         GUID         = $ID
                         RowKey       = $ID
+                        Source       = $Source
                     }
                     Add-CIPPAzDataTableEntity @Table -Entity $entity -Force
                     break
@@ -129,7 +165,13 @@ function Import-CommunityTemplate {
                         SHA          = $SHA
                         GUID         = $ID
                         RowKey       = $ID
+                        Source       = $Source
                     }
+
+                    if ($Existing -and $Existing.Package) {
+                        $entity.Package = $Existing.Package
+                    }
+
                     Add-CIPPAzDataTableEntity @Table -Entity $entity -Force
 
                 }

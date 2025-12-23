@@ -3,7 +3,7 @@ function Write-LogMessage {
     .FUNCTIONALITY
     Internal
     #>
-    Param(
+    param(
         $message,
         $tenant = 'None',
         $API = 'None',
@@ -51,7 +51,7 @@ function Write-LogMessage {
         'Message'      = [string]$message
         'Username'     = [string]$username
         'Severity'     = [string]$sev
-        'SentAsAlert'  = $false
+        'sentAsAlert'  = $false
         'PartitionKey' = [string]$PartitionKey
         'RowKey'       = [string]([guid]::NewGuid()).ToString()
         'FunctionNode' = [string]$env:WEBSITE_SITE_NAME
@@ -65,6 +65,19 @@ function Write-LogMessage {
     }
     if ($tenantId) {
         $TableRow.Add('TenantID', [string]$tenantId)
+    }
+    if ($script:CippStandardInfoStorage -and $script:CippStandardInfoStorage.Value) {
+        $TableRow.Standard = [string]$script:CippStandardInfoStorage.Value.Standard
+        $TableRow.StandardTemplateId = [string]$script:CippStandardInfoStorage.Value.StandardTemplateId
+        if ($script:CippStandardInfoStorage.Value.IntuneTemplateId) {
+            $TableRow.IntuneTemplateId = [string]$script:CippStandardInfoStorage.Value.IntuneTemplateId
+        }
+        if ($script:CippStandardInfoStorage.Value.ConditionalAccessTemplateId) {
+            $TableRow.ConditionalAccessTemplateId = [string]$script:CippStandardInfoStorage.Value.ConditionalAccessTemplateId
+        }
+    }
+    if ($script:CippScheduledTaskIdStorage -and $script:CippScheduledTaskIdStorage.Value) {
+        $TableRow.ScheduledTaskId = [string]$script:CippScheduledTaskIdStorage.Value
     }
 
     $Table.Entity = $TableRow
